@@ -1,0 +1,1711 @@
+# 🌱 Huertas Comunitarias — Prompts y Código Backend
+
+> Sistema de gestión de huertas comunitarias (ODS 2 - Hambre Cero)
+> Stack: **Node.js · Express · Mongoose · MongoDB Atlas**
+
+---
+
+## Tabla de contenido
+
+1. [Estructura del proyecto](#1-estructura-del-proyecto)
+2. [Configuración inicial](#2-configuración-inicial)
+3. [Modelos Mongoose](#3-modelos-mongoose)
+4. [Módulo de autenticación JWT](#4-módulo-de-autenticación-jwt)
+5. [CRUD Huertas](#5-crud-huertas)
+6. [CRUD Cultivos](#6-crud-cultivos)
+7. [CRUD Voluntarios](#7-crud-voluntarios)
+8. [CRUD Tareas](#8-crud-tareas)
+9. [CRUD Donaciones](#9-crud-donaciones)
+10. [Reportes y Dashboard](#10-reportes-y-dashboard)
+11. [App y Server](#11-app-y-server)
+12. [Seed de datos](#12-seed-de-datos)
+
+---
+
+## 1. Estructura del proyecto
+
+```
+backend/
+├── src/
+│   ├── config/
+│   │   └── db.js
+│   ├── models/
+│   │   ├── Usuario.model.js
+│   │   ├── Huerta.model.js
+│   │   ├── Cultivo.model.js
+│   │   ├── Voluntario.model.js
+│   │   ├── Tarea.model.js
+│   │   └── Donacion.model.js
+│   ├── controllers/
+│   │   ├── auth.controller.js
+│   │   ├── huerta.controller.js
+│   │   ├── cultivo.controller.js
+│   │   ├── voluntario.controller.js
+│   │   ├── tarea.controller.js
+│   │   ├── donacion.controller.js
+│   │   └── reporte.controller.js
+│   ├── routes/
+│   │   ├── auth.routes.js
+│   │   ├── huerta.routes.js
+│   │   ├── cultivo.routes.js
+│   │   ├── voluntario.routes.js
+│   │   ├── tarea.routes.js
+│   │   ├── donacion.routes.js
+│   │   └── reporte.routes.js
+│   ├── middleware/
+│   │   ├── auth.middleware.js
+│   │   └── error.middleware.js
+│   └── app.js
+├── server.js
+├── seed.js
+├── .env.example
+└── package.json
+```
+
+---
+
+## 2. Configuración inicial
+
+### `package.json`
+
+```json
+{
+  "name": "huertas-comunitarias-backend",
+  "version": "1.0.0",
+  "description": "Backend API - Huertas Comunitarias ODS 2",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.4.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}
+```
+
+### `.env.example`
+
+```env
+PORT=3000
+MONGO_URI=mongodb+srv://<usuario>:<password>@cluster0.xxxxx.mongodb.net/huertas_comunitarias?retryWrites=true&w=majority
+JWT_SECRET=huertas_comunitarias_super_secret_key_2024
+JWT_EXPIRES_IN=7d
+NODE_ENV=development
+```
+
+### `src/config/db.js`
+
+```js
+const mongoose = require('mongoose');
+
+const connectDB = async () => {
+  try {
+    const conn = await mongoose.connect(process.env.MONGO_URI);
+    console.log(`✅ MongoDB conectado: ${conn.connection.host}`);
+  } catch (error) {
+    console.error(`❌ Error conectando a MongoDB: ${error.message}`);
+    process.exit(1);
+  }
+};
+
+module.exports = connectDB;
+```
+
+---
+
+## 3. Modelos Mongoose
+
+### Prompt
+
+```
+Actúa como senior backend developer especializado en Node.js, Express y Mongoose.
+
+Necesito que generes los modelos Mongoose para un sistema llamado "Huertas Comunitarias"
+(ODS 2 - Hambre Cero). La aplicación gestiona huertas urbanas comunitarias con Angular 21
+en el frontend.
+
+Crea los siguientes modelos con sus validaciones completas:
+
+1. Usuario — campos: nombre, email, password (hasheado con bcryptjs), rol
+   (enum: admin/docente/voluntario), avatar, activo. Incluye método de instancia
+   compararPassword() y hook pre-save para hashear.
+
+2. Huerta — campos: nombre, descripcion, ubicacion (subdocumento con direccion/lat/lng),
+   area en m², referencia a responsable (Usuario), estado
+   (enum: activa/inactiva/en_preparacion), imagen.
+
+3. Cultivo — campos: nombre, tipo (enum: hortaliza/fruta/hierba/cereal/legumbre/otro),
+   referencia a huerta, estado
+   (enum: semilla/germinacion/crecimiento/fruicion/lista_cosechar/cosechada),
+   fechaSiembra, fechaCosechaEstimada, fechaCosechaReal, cantidadSembrada,
+   cantidadCosechada, unidad (enum: kg/g/unidades/litros), notas, emoji.
+
+4. Voluntario — campos: referencia a usuario, nombre, apellido, email, telefono,
+   array de referencias a huertas, disponibilidad (array de días enum),
+   horasAcumuladas, estado (enum: activo/inactivo/pendiente), notas.
+
+5. Tarea — campos: titulo, descripcion, referencia a huerta (required), referencia a
+   voluntario (asignadoA), referencia a cultivo, tipo
+   (enum: riego/siembra/cosecha/fertilizacion/control_plagas/limpieza/otro),
+   prioridad (enum: baja/media/alta/urgente), estado
+   (enum: pendiente/en_proceso/completada/cancelada), fechaLimite, fechaCompletada, notas.
+
+6. Donacion — campos: donante (subdocumento con nombre/tipo/contacto), referencia a huerta,
+   tipoDonacion (enum: semillas/herramientas/fertilizantes/agua/monetario/otro),
+   descripcion, cantidad, unidad, valorEstimado, estado
+   (enum: recibida/pendiente/rechazada), fechaDonacion, emoji, notas.
+
+Requisitos:
+- Todos los modelos deben incluir timestamps: true
+- Usar mensajes de validación en español
+- Usar referencias ObjectId donde corresponda con ref correcta
+- Exportar con mongoose.model()
+- Usar ES5 (require/module.exports), NO ES6 imports
+```
+
+---
+
+### `src/models/Usuario.model.js`
+
+```js
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+
+const usuarioSchema = new mongoose.Schema(
+  {
+    nombre: {
+      type: String,
+      required: [true, 'El nombre es obligatorio'],
+      trim: true,
+    },
+    email: {
+      type: String,
+      required: [true, 'El email es obligatorio'],
+      unique: true,
+      lowercase: true,
+      trim: true,
+      match: [/^\S+@\S+\.\S+$/, 'Email inválido'],
+    },
+    password: {
+      type: String,
+      required: [true, 'La contraseña es obligatoria'],
+      minlength: [6, 'Mínimo 6 caracteres'],
+      select: false,
+    },
+    rol: {
+      type: String,
+      enum: ['admin', 'docente', 'voluntario'],
+      default: 'voluntario',
+    },
+    avatar: { type: String, default: null },
+    activo: { type: Boolean, default: true },
+  },
+  { timestamps: true }
+);
+
+usuarioSchema.pre('save', async function (next) {
+  if (!this.isModified('password')) return next();
+  this.password = await bcrypt.hash(this.password, 12);
+  next();
+});
+
+usuarioSchema.methods.compararPassword = async function (candidato) {
+  return await bcrypt.compare(candidato, this.password);
+};
+
+module.exports = mongoose.model('Usuario', usuarioSchema);
+```
+
+### `src/models/Huerta.model.js`
+
+```js
+const mongoose = require('mongoose');
+
+const huertaSchema = new mongoose.Schema(
+  {
+    nombre: {
+      type: String,
+      required: [true, 'El nombre es obligatorio'],
+      trim: true,
+    },
+    descripcion: { type: String, trim: true },
+    ubicacion: {
+      direccion: { type: String, required: true },
+      lat: { type: Number },
+      lng: { type: Number },
+    },
+    area: { type: Number, default: 0 },
+    responsable: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario' },
+    estado: {
+      type: String,
+      enum: ['activa', 'inactiva', 'en_preparacion'],
+      default: 'activa',
+    },
+    imagen: { type: String, default: null },
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model('Huerta', huertaSchema);
+```
+
+### `src/models/Cultivo.model.js`
+
+```js
+const mongoose = require('mongoose');
+
+const cultivoSchema = new mongoose.Schema(
+  {
+    nombre: {
+      type: String,
+      required: [true, 'El nombre es obligatorio'],
+      trim: true,
+    },
+    tipo: {
+      type: String,
+      enum: ['hortaliza', 'fruta', 'hierba', 'cereal', 'legumbre', 'otro'],
+      default: 'hortaliza',
+    },
+    huerta: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Huerta',
+      required: true,
+    },
+    estado: {
+      type: String,
+      enum: ['semilla', 'germinacion', 'crecimiento', 'fruicion', 'lista_cosechar', 'cosechada'],
+      default: 'semilla',
+    },
+    fechaSiembra: { type: Date },
+    fechaCosechaEstimada: { type: Date },
+    fechaCosechaReal: { type: Date, default: null },
+    cantidadSembrada: { type: Number, default: 0 },
+    cantidadCosechada: { type: Number, default: 0 },
+    unidad: {
+      type: String,
+      enum: ['kg', 'g', 'unidades', 'litros'],
+      default: 'kg',
+    },
+    notas: { type: String },
+    emoji: { type: String, default: '🌱' },
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model('Cultivo', cultivoSchema);
+```
+
+### `src/models/Voluntario.model.js`
+
+```js
+const mongoose = require('mongoose');
+
+const voluntarioSchema = new mongoose.Schema(
+  {
+    usuario: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario' },
+    nombre: {
+      type: String,
+      required: [true, 'El nombre es obligatorio'],
+      trim: true,
+    },
+    apellido: { type: String, trim: true },
+    email: { type: String, required: true, lowercase: true },
+    telefono: { type: String },
+    huertas: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Huerta' }],
+    disponibilidad: {
+      type: [String],
+      enum: ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'],
+      default: [],
+    },
+    horasAcumuladas: { type: Number, default: 0 },
+    estado: {
+      type: String,
+      enum: ['activo', 'inactivo', 'pendiente'],
+      default: 'activo',
+    },
+    notas: { type: String },
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model('Voluntario', voluntarioSchema);
+```
+
+### `src/models/Tarea.model.js`
+
+```js
+const mongoose = require('mongoose');
+
+const tareaSchema = new mongoose.Schema(
+  {
+    titulo: {
+      type: String,
+      required: [true, 'El título es obligatorio'],
+      trim: true,
+    },
+    descripcion: { type: String },
+    huerta: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Huerta',
+      required: true,
+    },
+    asignadoA: { type: mongoose.Schema.Types.ObjectId, ref: 'Voluntario' },
+    cultivo: { type: mongoose.Schema.Types.ObjectId, ref: 'Cultivo', default: null },
+    tipo: {
+      type: String,
+      enum: ['riego', 'siembra', 'cosecha', 'fertilizacion', 'control_plagas', 'limpieza', 'otro'],
+      default: 'otro',
+    },
+    prioridad: {
+      type: String,
+      enum: ['baja', 'media', 'alta', 'urgente'],
+      default: 'media',
+    },
+    estado: {
+      type: String,
+      enum: ['pendiente', 'en_proceso', 'completada', 'cancelada'],
+      default: 'pendiente',
+    },
+    fechaLimite: { type: Date },
+    fechaCompletada: { type: Date, default: null },
+    notas: { type: String },
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model('Tarea', tareaSchema);
+```
+
+### `src/models/Donacion.model.js`
+
+```js
+const mongoose = require('mongoose');
+
+const donacionSchema = new mongoose.Schema(
+  {
+    donante: {
+      nombre: { type: String, required: true },
+      tipo: {
+        type: String,
+        enum: ['empresa', 'persona', 'institucion'],
+        default: 'empresa',
+      },
+      contacto: { type: String },
+    },
+    huerta: { type: mongoose.Schema.Types.ObjectId, ref: 'Huerta', default: null },
+    tipoDonacion: {
+      type: String,
+      enum: ['semillas', 'herramientas', 'fertilizantes', 'agua', 'monetario', 'otro'],
+      default: 'semillas',
+    },
+    descripcion: { type: String, required: true },
+    cantidad: { type: Number },
+    unidad: { type: String },
+    valorEstimado: { type: Number, default: 0 },
+    estado: {
+      type: String,
+      enum: ['recibida', 'pendiente', 'rechazada'],
+      default: 'recibida',
+    },
+    fechaDonacion: { type: Date, default: Date.now },
+    emoji: { type: String, default: '🌽' },
+    notas: { type: String },
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model('Donacion', donacionSchema);
+```
+
+---
+
+## 4. Módulo de autenticación JWT
+
+### Prompt
+
+```
+Actúa como senior backend developer especializado en Node.js, Express, Mongoose y JWT.
+
+Necesito el módulo de autenticación completo para el sistema "Huertas Comunitarias".
+Ya tengo el modelo Usuario con el método compararPassword() y hook de hash en pre-save.
+
+Genera los siguientes 3 archivos:
+
+--- ARCHIVO 1: auth.controller.js ---
+Endpoints requeridos:
+- POST /registro: crear usuario, validar que el email no exista, devolver token JWT
+- POST /login: validar credenciales, comprobar que el usuario esté activo, devolver token JWT
+- GET /perfil: devolver datos del usuario autenticado (sin password)
+- PUT /perfil: actualizar nombre y avatar del usuario autenticado
+
+El token JWT debe generarse con:
+  jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN })
+Todas las respuestas deben tener formato: { ok: true/false, token?, usuario?, mensaje? }
+
+--- ARCHIVO 2: auth.middleware.js ---
+- Función "proteger": extrae el Bearer token del header Authorization, lo verifica con
+  jwt.verify, busca el usuario en DB, lo inyecta en req.usuario
+- Función "restringirA(...roles)": factory que devuelve middleware para control de acceso
+  por rol
+- Manejo de errores con mensajes claros en español
+
+--- ARCHIVO 3: auth.routes.js ---
+- Montar los 4 endpoints usando el controller y el middleware
+- Las rutas de perfil deben estar protegidas
+
+Requisitos:
+- Usar require/module.exports (ES5)
+- Variables de entorno: JWT_SECRET, JWT_EXPIRES_IN
+- No incluir el password en las respuestas (usar .select('+password') solo donde sea necesario)
+```
+
+---
+
+### `src/controllers/auth.controller.js`
+
+```js
+const jwt = require('jsonwebtoken');
+const Usuario = require('../models/Usuario.model');
+
+const generarToken = (id) => {
+  return jwt.sign({ id }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  });
+};
+
+// POST /api/auth/registro
+exports.registro = async (req, res) => {
+  try {
+    const { nombre, email, password, rol } = req.body;
+    const usuarioExistente = await Usuario.findOne({ email });
+    if (usuarioExistente) {
+      return res.status(400).json({ ok: false, mensaje: 'El email ya está registrado' });
+    }
+    const usuario = await Usuario.create({ nombre, email, password, rol });
+    const token = generarToken(usuario._id);
+    res.status(201).json({
+      ok: true,
+      token,
+      usuario: { id: usuario._id, nombre: usuario.nombre, email: usuario.email, rol: usuario.rol },
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+
+// POST /api/auth/login
+exports.login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ ok: false, mensaje: 'Email y contraseña son requeridos' });
+    }
+    const usuario = await Usuario.findOne({ email }).select('+password');
+    if (!usuario || !(await usuario.compararPassword(password))) {
+      return res.status(401).json({ ok: false, mensaje: 'Credenciales inválidas' });
+    }
+    if (!usuario.activo) {
+      return res.status(401).json({ ok: false, mensaje: 'Cuenta desactivada' });
+    }
+    const token = generarToken(usuario._id);
+    res.json({
+      ok: true,
+      token,
+      usuario: {
+        id: usuario._id,
+        nombre: usuario.nombre,
+        email: usuario.email,
+        rol: usuario.rol,
+        avatar: usuario.avatar,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+
+// GET /api/auth/perfil
+exports.perfil = async (req, res) => {
+  try {
+    const usuario = await Usuario.findById(req.usuario._id);
+    res.json({ ok: true, usuario });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+
+// PUT /api/auth/perfil
+exports.actualizarPerfil = async (req, res) => {
+  try {
+    const { nombre, avatar } = req.body;
+    const usuario = await Usuario.findByIdAndUpdate(
+      req.usuario._id,
+      { nombre, avatar },
+      { new: true, runValidators: true }
+    );
+    res.json({ ok: true, usuario });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+```
+
+### `src/middleware/auth.middleware.js`
+
+```js
+const jwt = require('jsonwebtoken');
+const Usuario = require('../models/Usuario.model');
+
+exports.proteger = async (req, res, next) => {
+  try {
+    let token;
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+      token = req.headers.authorization.split(' ')[1];
+    }
+    if (!token) {
+      return res.status(401).json({ ok: false, mensaje: 'No autorizado. Token requerido.' });
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const usuario = await Usuario.findById(decoded.id);
+    if (!usuario || !usuario.activo) {
+      return res.status(401).json({ ok: false, mensaje: 'Usuario no encontrado o inactivo.' });
+    }
+    req.usuario = usuario;
+    next();
+  } catch (error) {
+    return res.status(401).json({ ok: false, mensaje: 'Token inválido o expirado.' });
+  }
+};
+
+exports.restringirA = (...roles) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.usuario.rol)) {
+      return res.status(403).json({
+        ok: false,
+        mensaje: `Acceso denegado. Rol requerido: ${roles.join(', ')}`,
+      });
+    }
+    next();
+  };
+};
+```
+
+### `src/middleware/error.middleware.js`
+
+```js
+exports.errorHandler = (err, req, res, next) => {
+  let error = { ...err };
+  error.message = err.message;
+  console.error('❌ Error:', err);
+
+  if (err.name === 'CastError') {
+    return res.status(400).json({ ok: false, mensaje: 'ID de recurso inválido' });
+  }
+  if (err.code === 11000) {
+    const campo = Object.keys(err.keyValue)[0];
+    return res.status(400).json({ ok: false, mensaje: `El campo '${campo}' ya existe` });
+  }
+  if (err.name === 'ValidationError') {
+    const mensajes = Object.values(err.errors).map((e) => e.message);
+    return res.status(400).json({ ok: false, mensaje: mensajes.join('. ') });
+  }
+  if (err.name === 'JsonWebTokenError') {
+    return res.status(401).json({ ok: false, mensaje: 'Token inválido' });
+  }
+  res.status(error.statusCode || 500).json({
+    ok: false,
+    mensaje: error.message || 'Error interno del servidor',
+  });
+};
+
+exports.notFound = (req, res) => {
+  res.status(404).json({ ok: false, mensaje: `Ruta no encontrada: ${req.originalUrl}` });
+};
+```
+
+### `src/routes/auth.routes.js`
+
+```js
+const express = require('express');
+const router = express.Router();
+const { registro, login, perfil, actualizarPerfil } = require('../controllers/auth.controller');
+const { proteger } = require('../middleware/auth.middleware');
+
+router.post('/registro', registro);
+router.post('/login', login);
+router.get('/perfil', proteger, perfil);
+router.put('/perfil', proteger, actualizarPerfil);
+
+module.exports = router;
+```
+
+---
+
+## 5. CRUD Huertas
+
+### Prompt
+
+```
+Actúa como senior backend developer en Node.js + Express + Mongoose.
+
+Genera el CRUD completo para el recurso Huerta del sistema "Huertas Comunitarias".
+
+--- ARCHIVO 1: huerta.controller.js ---
+Funciones requeridas:
+
+getHuertas — GET con filtros opcionales por query string (?estado=activa), paginación
+(?page=1&limit=10), populate del campo responsable (nombre, email),
+devolver { ok, total, pagina, huertas }.
+
+getHuerta — GET por ID, populate responsable completo, manejar 404.
+
+crearHuerta — POST, usar req.body directamente, devolver 201.
+
+actualizarHuerta — PUT por ID, usar findByIdAndUpdate con
+{ new: true, runValidators: true }, manejar 404.
+
+eliminarHuerta — DELETE por ID con findByIdAndDelete, manejar 404.
+
+Todas las funciones con try/catch. Formato de respuesta uniforme:
+{ ok: true/false, mensaje?, huerta/huertas? }
+
+--- ARCHIVO 2: huerta.routes.js ---
+- Aplicar middleware "proteger" a todas las rutas con router.use()
+- GET / y GET /:id: cualquier usuario autenticado
+- POST / y PUT /:id: roles admin y docente
+- DELETE /:id: solo admin
+- Usar restringirA() del auth middleware
+```
+
+---
+
+### `src/controllers/huerta.controller.js`
+
+```js
+const Huerta = require('../models/Huerta.model');
+
+exports.getHuertas = async (req, res) => {
+  try {
+    const { estado, page = 1, limit = 10 } = req.query;
+    const filtro = {};
+    if (estado) filtro.estado = estado;
+
+    const skip = (page - 1) * limit;
+    const [huertas, total] = await Promise.all([
+      Huerta.find(filtro)
+        .populate('responsable', 'nombre email')
+        .skip(skip)
+        .limit(Number(limit))
+        .sort({ createdAt: -1 }),
+      Huerta.countDocuments(filtro),
+    ]);
+
+    res.json({ ok: true, total, pagina: Number(page), huertas });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.getHuerta = async (req, res) => {
+  try {
+    const huerta = await Huerta.findById(req.params.id)
+      .populate('responsable', 'nombre email rol');
+    if (!huerta) return res.status(404).json({ ok: false, mensaje: 'Huerta no encontrada' });
+    res.json({ ok: true, huerta });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.crearHuerta = async (req, res) => {
+  try {
+    const huerta = await Huerta.create(req.body);
+    res.status(201).json({ ok: true, huerta });
+  } catch (error) {
+    res.status(400).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.actualizarHuerta = async (req, res) => {
+  try {
+    const huerta = await Huerta.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    });
+    if (!huerta) return res.status(404).json({ ok: false, mensaje: 'Huerta no encontrada' });
+    res.json({ ok: true, huerta });
+  } catch (error) {
+    res.status(400).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.eliminarHuerta = async (req, res) => {
+  try {
+    const huerta = await Huerta.findByIdAndDelete(req.params.id);
+    if (!huerta) return res.status(404).json({ ok: false, mensaje: 'Huerta no encontrada' });
+    res.json({ ok: true, mensaje: 'Huerta eliminada correctamente' });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+```
+
+### `src/routes/huerta.routes.js`
+
+```js
+const express = require('express');
+const router = express.Router();
+const {
+  getHuertas, getHuerta, crearHuerta, actualizarHuerta, eliminarHuerta,
+} = require('../controllers/huerta.controller');
+const { proteger, restringirA } = require('../middleware/auth.middleware');
+
+router.use(proteger);
+
+router.get('/', getHuertas);
+router.get('/:id', getHuerta);
+router.post('/', restringirA('admin', 'docente'), crearHuerta);
+router.put('/:id', restringirA('admin', 'docente'), actualizarHuerta);
+router.delete('/:id', restringirA('admin'), eliminarHuerta);
+
+module.exports = router;
+```
+
+---
+
+## 6. CRUD Cultivos
+
+### Prompt
+
+```
+Actúa como senior backend developer en Node.js + Express + Mongoose.
+
+Genera el CRUD completo para el recurso Cultivo del sistema "Huertas Comunitarias".
+
+--- ARCHIVO 1: cultivo.controller.js ---
+Funciones requeridas:
+
+getCultivos — GET con filtros opcionales: ?huerta=id&estado=crecimiento&tipo=hortaliza.
+Populate de huerta (nombre, ubicacion). Devolver { ok, total, cultivos }.
+
+getCultivo — GET por ID con populate de huerta.
+
+crearCultivo — POST desde req.body, devolver 201.
+
+actualizarCultivo — PUT por ID. Lógica especial: si req.body.estado === 'cosechada' y
+no se envía fechaCosechaReal, asignarla automáticamente con new Date().
+Usar findByIdAndUpdate con { new: true, runValidators: true }.
+
+eliminarCultivo — DELETE por ID.
+
+--- ARCHIVO 2: cultivo.routes.js ---
+- router.use(proteger) para todas las rutas
+- GET: cualquier rol autenticado
+- POST, PUT: admin o docente
+- DELETE: solo admin
+
+Estados del ciclo de vida: semilla → germinacion → crecimiento → fruicion →
+lista_cosechar → cosechada
+```
+
+---
+
+### `src/controllers/cultivo.controller.js`
+
+```js
+const Cultivo = require('../models/Cultivo.model');
+
+exports.getCultivos = async (req, res) => {
+  try {
+    const { huerta, estado, tipo } = req.query;
+    const filtro = {};
+    if (huerta) filtro.huerta = huerta;
+    if (estado) filtro.estado = estado;
+    if (tipo) filtro.tipo = tipo;
+
+    const cultivos = await Cultivo.find(filtro)
+      .populate('huerta', 'nombre ubicacion')
+      .sort({ createdAt: -1 });
+
+    res.json({ ok: true, total: cultivos.length, cultivos });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.getCultivo = async (req, res) => {
+  try {
+    const cultivo = await Cultivo.findById(req.params.id).populate('huerta', 'nombre ubicacion');
+    if (!cultivo) return res.status(404).json({ ok: false, mensaje: 'Cultivo no encontrado' });
+    res.json({ ok: true, cultivo });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.crearCultivo = async (req, res) => {
+  try {
+    const cultivo = await Cultivo.create(req.body);
+    res.status(201).json({ ok: true, cultivo });
+  } catch (error) {
+    res.status(400).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.actualizarCultivo = async (req, res) => {
+  try {
+    if (req.body.estado === 'cosechada' && !req.body.fechaCosechaReal) {
+      req.body.fechaCosechaReal = new Date();
+    }
+    const cultivo = await Cultivo.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    });
+    if (!cultivo) return res.status(404).json({ ok: false, mensaje: 'Cultivo no encontrado' });
+    res.json({ ok: true, cultivo });
+  } catch (error) {
+    res.status(400).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.eliminarCultivo = async (req, res) => {
+  try {
+    const cultivo = await Cultivo.findByIdAndDelete(req.params.id);
+    if (!cultivo) return res.status(404).json({ ok: false, mensaje: 'Cultivo no encontrado' });
+    res.json({ ok: true, mensaje: 'Cultivo eliminado correctamente' });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+```
+
+### `src/routes/cultivo.routes.js`
+
+```js
+const express = require('express');
+const router = express.Router();
+const {
+  getCultivos, getCultivo, crearCultivo, actualizarCultivo, eliminarCultivo,
+} = require('../controllers/cultivo.controller');
+const { proteger, restringirA } = require('../middleware/auth.middleware');
+
+router.use(proteger);
+
+router.get('/', getCultivos);
+router.get('/:id', getCultivo);
+router.post('/', restringirA('admin', 'docente'), crearCultivo);
+router.put('/:id', restringirA('admin', 'docente'), actualizarCultivo);
+router.delete('/:id', restringirA('admin'), eliminarCultivo);
+
+module.exports = router;
+```
+
+---
+
+## 7. CRUD Voluntarios
+
+### Prompt
+
+```
+Actúa como senior backend developer en Node.js + Express + Mongoose.
+
+Genera el CRUD completo para el recurso Voluntario del sistema "Huertas Comunitarias".
+
+--- ARCHIVO 1: voluntario.controller.js ---
+Funciones requeridas:
+
+getVoluntarios — GET con filtros ?estado=activo&huerta=id. Populate de huertas (nombre)
+y usuario (nombre, email). Ordenar por nombre ascendente.
+
+getVoluntario — GET por ID con populate completo.
+
+crearVoluntario — POST desde req.body, devolver 201.
+
+actualizarVoluntario — PUT por ID con validadores.
+
+eliminarVoluntario — DELETE por ID.
+
+registrarHoras — PATCH especial: recibe { horas: Number } en el body y usa $inc para
+sumar horas al campo horasAcumuladas sin reemplazar el valor existente.
+Devolver el voluntario actualizado.
+
+--- ARCHIVO 2: voluntario.routes.js ---
+- Todas las rutas protegidas
+- GET: cualquier autenticado
+- POST, PUT: admin o docente
+- DELETE: solo admin
+- PATCH /:id/horas: admin o docente
+```
+
+---
+
+### `src/controllers/voluntario.controller.js`
+
+```js
+const Voluntario = require('../models/Voluntario.model');
+
+exports.getVoluntarios = async (req, res) => {
+  try {
+    const { estado, huerta } = req.query;
+    const filtro = {};
+    if (estado) filtro.estado = estado;
+    if (huerta) filtro.huertas = huerta;
+
+    const voluntarios = await Voluntario.find(filtro)
+      .populate('huertas', 'nombre')
+      .populate('usuario', 'nombre email')
+      .sort({ nombre: 1 });
+
+    res.json({ ok: true, total: voluntarios.length, voluntarios });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.getVoluntario = async (req, res) => {
+  try {
+    const voluntario = await Voluntario.findById(req.params.id)
+      .populate('huertas', 'nombre ubicacion')
+      .populate('usuario', 'nombre email rol');
+    if (!voluntario) return res.status(404).json({ ok: false, mensaje: 'Voluntario no encontrado' });
+    res.json({ ok: true, voluntario });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.crearVoluntario = async (req, res) => {
+  try {
+    const voluntario = await Voluntario.create(req.body);
+    res.status(201).json({ ok: true, voluntario });
+  } catch (error) {
+    res.status(400).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.actualizarVoluntario = async (req, res) => {
+  try {
+    const voluntario = await Voluntario.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    });
+    if (!voluntario) return res.status(404).json({ ok: false, mensaje: 'Voluntario no encontrado' });
+    res.json({ ok: true, voluntario });
+  } catch (error) {
+    res.status(400).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.eliminarVoluntario = async (req, res) => {
+  try {
+    const voluntario = await Voluntario.findByIdAndDelete(req.params.id);
+    if (!voluntario) return res.status(404).json({ ok: false, mensaje: 'Voluntario no encontrado' });
+    res.json({ ok: true, mensaje: 'Voluntario eliminado correctamente' });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.registrarHoras = async (req, res) => {
+  try {
+    const { horas } = req.body;
+    const voluntario = await Voluntario.findByIdAndUpdate(
+      req.params.id,
+      { $inc: { horasAcumuladas: horas } },
+      { new: true }
+    );
+    if (!voluntario) return res.status(404).json({ ok: false, mensaje: 'Voluntario no encontrado' });
+    res.json({ ok: true, voluntario });
+  } catch (error) {
+    res.status(400).json({ ok: false, mensaje: error.message });
+  }
+};
+```
+
+### `src/routes/voluntario.routes.js`
+
+```js
+const express = require('express');
+const router = express.Router();
+const {
+  getVoluntarios, getVoluntario, crearVoluntario,
+  actualizarVoluntario, eliminarVoluntario, registrarHoras,
+} = require('../controllers/voluntario.controller');
+const { proteger, restringirA } = require('../middleware/auth.middleware');
+
+router.use(proteger);
+
+router.get('/', getVoluntarios);
+router.get('/:id', getVoluntario);
+router.post('/', restringirA('admin', 'docente'), crearVoluntario);
+router.put('/:id', restringirA('admin', 'docente'), actualizarVoluntario);
+router.delete('/:id', restringirA('admin'), eliminarVoluntario);
+router.patch('/:id/horas', restringirA('admin', 'docente'), registrarHoras);
+
+module.exports = router;
+```
+
+---
+
+## 8. CRUD Tareas
+
+### Prompt
+
+```
+Actúa como senior backend developer en Node.js + Express + Mongoose.
+
+Genera el CRUD completo para el recurso Tarea del sistema "Huertas Comunitarias".
+
+--- ARCHIVO 1: tarea.controller.js ---
+Funciones requeridas:
+
+getTareas — GET con filtros: ?estado=pendiente&prioridad=alta&huerta=id&asignadoA=id&tipo=riego.
+Populate de huerta (nombre), asignadoA (nombre, apellido), cultivo (nombre, emoji).
+Ordenar por prioridad descendente y fechaLimite ascendente.
+
+getTarea — GET por ID con populate completo.
+
+crearTarea — POST, devolver 201.
+
+actualizarTarea — PUT por ID. Si estado === 'completada' y no hay fechaCompletada en el body,
+asignarla con new Date().
+
+eliminarTarea — DELETE por ID.
+
+cambiarEstado — PATCH rápido: recibe { estado } en el body, construye el objeto update
+(agrega fechaCompletada si corresponde), usa findByIdAndUpdate. Este endpoint es para
+voluntarios que cambian el estado de sus tareas asignadas.
+
+--- ARCHIVO 2: tarea.routes.js ---
+- Todas las rutas protegidas
+- GET: cualquier autenticado
+- POST, PUT: admin o docente
+- DELETE: solo admin
+- PATCH /:id/estado: cualquier autenticado (voluntarios pueden cambiar estado)
+```
+
+---
+
+### `src/controllers/tarea.controller.js`
+
+```js
+const Tarea = require('../models/Tarea.model');
+
+exports.getTareas = async (req, res) => {
+  try {
+    const { estado, prioridad, huerta, asignadoA, tipo } = req.query;
+    const filtro = {};
+    if (estado) filtro.estado = estado;
+    if (prioridad) filtro.prioridad = prioridad;
+    if (huerta) filtro.huerta = huerta;
+    if (asignadoA) filtro.asignadoA = asignadoA;
+    if (tipo) filtro.tipo = tipo;
+
+    const tareas = await Tarea.find(filtro)
+      .populate('huerta', 'nombre')
+      .populate('asignadoA', 'nombre apellido')
+      .populate('cultivo', 'nombre emoji')
+      .sort({ prioridad: -1, fechaLimite: 1 });
+
+    res.json({ ok: true, total: tareas.length, tareas });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.getTarea = async (req, res) => {
+  try {
+    const tarea = await Tarea.findById(req.params.id)
+      .populate('huerta', 'nombre ubicacion')
+      .populate('asignadoA', 'nombre apellido email')
+      .populate('cultivo', 'nombre emoji estado');
+    if (!tarea) return res.status(404).json({ ok: false, mensaje: 'Tarea no encontrada' });
+    res.json({ ok: true, tarea });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.crearTarea = async (req, res) => {
+  try {
+    const tarea = await Tarea.create(req.body);
+    res.status(201).json({ ok: true, tarea });
+  } catch (error) {
+    res.status(400).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.actualizarTarea = async (req, res) => {
+  try {
+    if (req.body.estado === 'completada' && !req.body.fechaCompletada) {
+      req.body.fechaCompletada = new Date();
+    }
+    const tarea = await Tarea.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    });
+    if (!tarea) return res.status(404).json({ ok: false, mensaje: 'Tarea no encontrada' });
+    res.json({ ok: true, tarea });
+  } catch (error) {
+    res.status(400).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.eliminarTarea = async (req, res) => {
+  try {
+    const tarea = await Tarea.findByIdAndDelete(req.params.id);
+    if (!tarea) return res.status(404).json({ ok: false, mensaje: 'Tarea no encontrada' });
+    res.json({ ok: true, mensaje: 'Tarea eliminada correctamente' });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.cambiarEstado = async (req, res) => {
+  try {
+    const { estado } = req.body;
+    const update = { estado };
+    if (estado === 'completada') update.fechaCompletada = new Date();
+    const tarea = await Tarea.findByIdAndUpdate(req.params.id, update, { new: true });
+    if (!tarea) return res.status(404).json({ ok: false, mensaje: 'Tarea no encontrada' });
+    res.json({ ok: true, tarea });
+  } catch (error) {
+    res.status(400).json({ ok: false, mensaje: error.message });
+  }
+};
+```
+
+### `src/routes/tarea.routes.js`
+
+```js
+const express = require('express');
+const router = express.Router();
+const {
+  getTareas, getTarea, crearTarea, actualizarTarea, eliminarTarea, cambiarEstado,
+} = require('../controllers/tarea.controller');
+const { proteger, restringirA } = require('../middleware/auth.middleware');
+
+router.use(proteger);
+
+router.get('/', getTareas);
+router.get('/:id', getTarea);
+router.post('/', restringirA('admin', 'docente'), crearTarea);
+router.put('/:id', restringirA('admin', 'docente'), actualizarTarea);
+router.delete('/:id', restringirA('admin'), eliminarTarea);
+router.patch('/:id/estado', cambiarEstado);
+
+module.exports = router;
+```
+
+---
+
+## 9. CRUD Donaciones
+
+### Prompt
+
+```
+Actúa como senior backend developer en Node.js + Express + Mongoose.
+
+Genera el CRUD completo para el recurso Donacion del sistema "Huertas Comunitarias".
+
+--- ARCHIVO 1: donacion.controller.js ---
+Funciones requeridas:
+
+getDonaciones — GET con filtros: ?tipo=semillas&estado=recibida&huerta=id.
+Populate de huerta (nombre). Ordenar por fechaDonacion descendente
+(más reciente primero).
+
+getDonacion — GET por ID con populate de huerta (nombre, ubicacion).
+
+crearDonacion — POST desde req.body, devolver 201.
+
+actualizarDonacion — PUT con findByIdAndUpdate, { new: true, runValidators: true }.
+
+eliminarDonacion — DELETE por ID.
+
+--- ARCHIVO 2: donacion.routes.js ---
+- Todas las rutas protegidas con proteger
+- GET: cualquier autenticado
+- POST, PUT: admin o docente
+- DELETE: solo admin
+```
+
+---
+
+### `src/controllers/donacion.controller.js`
+
+```js
+const Donacion = require('../models/Donacion.model');
+
+exports.getDonaciones = async (req, res) => {
+  try {
+    const { tipo, estado, huerta } = req.query;
+    const filtro = {};
+    if (tipo) filtro.tipoDonacion = tipo;
+    if (estado) filtro.estado = estado;
+    if (huerta) filtro.huerta = huerta;
+
+    const donaciones = await Donacion.find(filtro)
+      .populate('huerta', 'nombre')
+      .sort({ fechaDonacion: -1 });
+
+    res.json({ ok: true, total: donaciones.length, donaciones });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.getDonacion = async (req, res) => {
+  try {
+    const donacion = await Donacion.findById(req.params.id).populate('huerta', 'nombre ubicacion');
+    if (!donacion) return res.status(404).json({ ok: false, mensaje: 'Donación no encontrada' });
+    res.json({ ok: true, donacion });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.crearDonacion = async (req, res) => {
+  try {
+    const donacion = await Donacion.create(req.body);
+    res.status(201).json({ ok: true, donacion });
+  } catch (error) {
+    res.status(400).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.actualizarDonacion = async (req, res) => {
+  try {
+    const donacion = await Donacion.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    });
+    if (!donacion) return res.status(404).json({ ok: false, mensaje: 'Donación no encontrada' });
+    res.json({ ok: true, donacion });
+  } catch (error) {
+    res.status(400).json({ ok: false, mensaje: error.message });
+  }
+};
+
+exports.eliminarDonacion = async (req, res) => {
+  try {
+    const donacion = await Donacion.findByIdAndDelete(req.params.id);
+    if (!donacion) return res.status(404).json({ ok: false, mensaje: 'Donación no encontrada' });
+    res.json({ ok: true, mensaje: 'Donación eliminada correctamente' });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+```
+
+### `src/routes/donacion.routes.js`
+
+```js
+const express = require('express');
+const router = express.Router();
+const {
+  getDonaciones, getDonacion, crearDonacion, actualizarDonacion, eliminarDonacion,
+} = require('../controllers/donacion.controller');
+const { proteger, restringirA } = require('../middleware/auth.middleware');
+
+router.use(proteger);
+
+router.get('/', getDonaciones);
+router.get('/:id', getDonacion);
+router.post('/', restringirA('admin', 'docente'), crearDonacion);
+router.put('/:id', restringirA('admin', 'docente'), actualizarDonacion);
+router.delete('/:id', restringirA('admin'), eliminarDonacion);
+
+module.exports = router;
+```
+
+---
+
+## 10. Reportes y Dashboard
+
+### Prompt
+
+```
+Actúa como senior backend developer en Node.js + Express + Mongoose con experiencia
+en aggregation pipelines.
+
+Genera el módulo de reportes para el sistema "Huertas Comunitarias". Este módulo
+alimenta el "Dashboard Principal: Gestión ODS 2" del frontend.
+
+--- ARCHIVO 1: reporte.controller.js ---
+Funciones requeridas:
+
+getDashboard — GET que retorna en una sola llamada con Promise.all():
+  - totalHuertasActivas: countDocuments({ estado: 'activa' })
+  - cosechasProximas: countDocuments({ estado: 'lista_cosechar' }) en Cultivo
+  - voluntariosHoy: countDocuments({ estado: 'activo' }) en Voluntario
+  - tareasPendientes y tareasEnProceso: conteos de Tarea
+  - tareasPrioritarias: 5 tareas con estado pendiente o en_proceso, ordenadas por
+    prioridad desc y fechaLimite asc, con populate de asignadoA
+  - donacionesRecientes: últimas 5 donaciones con populate de huerta
+  - cultivosEstado: aggregation que agrupa cultivos por estado
+    ($group por _id: '$estado')
+  - rendimientoPorMes: aggregation en Cultivo donde estado='cosechada', agrupar por
+    año y mes de fechaCosechaReal, sumar cantidadCosechada, limit 6
+
+getReporteCultivos — GET con filtros opcionales ?huerta&desde&hasta. Aggregation que
+filtra cosechados en el rango de fechas y agrupa por tipo, sumando cantidadCosechada.
+
+getReporteVoluntarios — GET top 10 voluntarios activos ordenados por horasAcumuladas
+desc. Calcular totalHoras con reduce.
+
+getReporteDonaciones — GET aggregation que agrupa donaciones por tipoDonacion,
+cuenta total y suma valorEstimado.
+
+--- ARCHIVO 2: reporte.routes.js ---
+- Todas las rutas protegidas
+- GET /dashboard
+- GET /cultivos
+- GET /voluntarios
+- GET /donaciones
+```
+
+---
+
+### `src/controllers/reporte.controller.js`
+
+```js
+const Huerta = require('../models/Huerta.model');
+const Cultivo = require('../models/Cultivo.model');
+const Voluntario = require('../models/Voluntario.model');
+const Tarea = require('../models/Tarea.model');
+const Donacion = require('../models/Donacion.model');
+
+// GET /api/reportes/dashboard
+exports.getDashboard = async (req, res) => {
+  try {
+    const [
+      totalHuertasActivas,
+      cosechasProximas,
+      voluntariosHoy,
+      tareasPendientes,
+      tareasEnProceso,
+      donacionesRecientes,
+      cultivosEstado,
+      rendimientoPorMes,
+    ] = await Promise.all([
+      Huerta.countDocuments({ estado: 'activa' }),
+      Cultivo.countDocuments({ estado: 'lista_cosechar' }),
+      Voluntario.countDocuments({ estado: 'activo' }),
+      Tarea.countDocuments({ estado: 'pendiente' }),
+      Tarea.countDocuments({ estado: 'en_proceso' }),
+      Donacion.find().sort({ fechaDonacion: -1 }).limit(5).populate('huerta', 'nombre'),
+      Cultivo.aggregate([{ $group: { _id: '$estado', total: { $sum: 1 } } }]),
+      Cultivo.aggregate([
+        { $match: { estado: 'cosechada', fechaCosechaReal: { $exists: true, $ne: null } } },
+        {
+          $group: {
+            _id: { year: { $year: '$fechaCosechaReal' }, month: { $month: '$fechaCosechaReal' } },
+            totalCosechado: { $sum: '$cantidadCosechada' },
+            cantidad: { $sum: 1 },
+          },
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1 } },
+        { $limit: 6 },
+      ]),
+    ]);
+
+    const tareasPrioritarias = await Tarea.find({
+      estado: { $in: ['pendiente', 'en_proceso'] },
+    })
+      .populate('asignadoA', 'nombre apellido')
+      .sort({ prioridad: -1, fechaLimite: 1 })
+      .limit(5);
+
+    res.json({
+      ok: true,
+      resumenMensual: {
+        totalHuertasActivas,
+        cosechasProximas,
+        voluntariosHoy,
+        tareasPendientes,
+        tareasEnProceso,
+      },
+      tareasPrioritarias,
+      donacionesRecientes,
+      cultivosEstado,
+      rendimientoPorMes,
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+
+// GET /api/reportes/cultivos
+exports.getReporteCultivos = async (req, res) => {
+  try {
+    const { huerta, desde, hasta } = req.query;
+    const filtro = { estado: 'cosechada' };
+    if (huerta) filtro.huerta = huerta;
+    if (desde || hasta) {
+      filtro.fechaCosechaReal = {};
+      if (desde) filtro.fechaCosechaReal.$gte = new Date(desde);
+      if (hasta) filtro.fechaCosechaReal.$lte = new Date(hasta);
+    }
+    const reporte = await Cultivo.aggregate([
+      { $match: filtro },
+      { $group: { _id: '$tipo', totalCosechado: { $sum: '$cantidadCosechada' }, cantidadCultivos: { $sum: 1 } } },
+      { $sort: { totalCosechado: -1 } },
+    ]);
+    res.json({ ok: true, reporte });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+
+// GET /api/reportes/voluntarios
+exports.getReporteVoluntarios = async (req, res) => {
+  try {
+    const voluntarios = await Voluntario.find({ estado: 'activo' })
+      .populate('huertas', 'nombre')
+      .sort({ horasAcumuladas: -1 })
+      .limit(10);
+    const totalHoras = voluntarios.reduce((acc, v) => acc + v.horasAcumuladas, 0);
+    res.json({ ok: true, totalHoras, topVoluntarios: voluntarios });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+
+// GET /api/reportes/donaciones
+exports.getReporteDonaciones = async (req, res) => {
+  try {
+    const resumen = await Donacion.aggregate([
+      { $group: { _id: '$tipoDonacion', total: { $sum: 1 }, valorTotal: { $sum: '$valorEstimado' } } },
+      { $sort: { total: -1 } },
+    ]);
+    res.json({ ok: true, resumen });
+  } catch (error) {
+    res.status(500).json({ ok: false, mensaje: error.message });
+  }
+};
+```
+
+### `src/routes/reporte.routes.js`
+
+```js
+const express = require('express');
+const router = express.Router();
+const {
+  getDashboard, getReporteCultivos, getReporteVoluntarios, getReporteDonaciones,
+} = require('../controllers/reporte.controller');
+const { proteger } = require('../middleware/auth.middleware');
+
+router.use(proteger);
+
+router.get('/dashboard', getDashboard);
+router.get('/cultivos', getReporteCultivos);
+router.get('/voluntarios', getReporteVoluntarios);
+router.get('/donaciones', getReporteDonaciones);
+
+module.exports = router;
+```
+
+---
+
+## 11. App y Server
+
+### `src/app.js`
+
+```js
+const express = require('express');
+const cors = require('cors');
+const { errorHandler, notFound } = require('./middleware/error.middleware');
+
+const authRoutes       = require('./routes/auth.routes');
+const huertaRoutes     = require('./routes/huerta.routes');
+const cultivoRoutes    = require('./routes/cultivo.routes');
+const voluntarioRoutes = require('./routes/voluntario.routes');
+const tareaRoutes      = require('./routes/tarea.routes');
+const donacionRoutes   = require('./routes/donacion.routes');
+const reporteRoutes    = require('./routes/reporte.routes');
+
+const app = express();
+
+app.use(cors({
+  origin: ['http://localhost:4200', 'http://localhost:4201'],
+  credentials: true,
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, mensaje: '🌱 API Huertas Comunitarias funcionando', timestamp: new Date() });
+});
+
+app.use('/api/auth',        authRoutes);
+app.use('/api/huertas',     huertaRoutes);
+app.use('/api/cultivos',    cultivoRoutes);
+app.use('/api/voluntarios', voluntarioRoutes);
+app.use('/api/tareas',      tareaRoutes);
+app.use('/api/donaciones',  donacionRoutes);
+app.use('/api/reportes',    reporteRoutes);
+
+app.use(notFound);
+app.use(errorHandler);
+
+module.exports = app;
+```
+
+### `server.js`
+
+```js
+require('dotenv').config();
+const app = require('./src/app');
+const connectDB = require('./src/config/db');
+
+const PORT = process.env.PORT || 3000;
+
+const iniciar = async () => {
+  await connectDB();
+  app.listen(PORT, () => {
+    console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+    console.log(`📋 Entorno: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🌱 API: http://localhost:${PORT}/api/health`);
+  });
+};
+
+iniciar();
+```
+
+---
+
+## 12. Seed de datos
+
+> Ejecutar con `node seed.js` para poblar la base de datos con datos de prueba
+> idénticos al dashboard de la imagen.
+
+```js
+require('dotenv').config();
+const mongoose = require('mongoose');
+const connectDB = require('./src/config/db');
+
+const Usuario    = require('./src/models/Usuario.model');
+const Huerta     = require('./src/models/Huerta.model');
+const Cultivo    = require('./src/models/Cultivo.model');
+const Voluntario = require('./src/models/Voluntario.model');
+const Tarea      = require('./src/models/Tarea.model');
+const Donacion   = require('./src/models/Donacion.model');
+
+const seed = async () => {
+  await connectDB();
+
+  await Promise.all([
+    Usuario.deleteMany(), Huerta.deleteMany(), Cultivo.deleteMany(),
+    Voluntario.deleteMany(), Tarea.deleteMany(), Donacion.deleteMany(),
+  ]);
+
+  const docente = await Usuario.create({
+    nombre: 'Mónica García', email: 'monica@huertas.com', password: '123456', rol: 'docente',
+  });
+  const admin = await Usuario.create({
+    nombre: 'Admin Sistema', email: 'admin@huertas.com', password: '123456', rol: 'admin',
+  });
+
+  const h1 = await Huerta.create({
+    nombre: 'Huerta Central Parque',
+    ubicacion: { direccion: 'Parque Central, Calle 5 #10-20', lat: 6.2442, lng: -75.5812 },
+    area: 200, responsable: docente._id, estado: 'activa',
+  });
+  const h2 = await Huerta.create({
+    nombre: 'Huerta Comunitaria Sur',
+    ubicacion: { direccion: 'Carrera 8 #15-30, Barrio Sur', lat: 6.2300, lng: -75.5900 },
+    area: 150, responsable: docente._id, estado: 'activa',
+  });
+
+  await Cultivo.create([
+    { nombre: 'Tomate Cherry', tipo: 'fruta', huerta: h1._id, estado: 'fruicion',
+      fechaSiembra: new Date('2025-02-01'), cantidadSembrada: 50, unidad: 'unidades', emoji: '🍅' },
+    { nombre: 'Zanahoria', tipo: 'hortaliza', huerta: h1._id, estado: 'crecimiento',
+      fechaSiembra: new Date('2025-03-01'), cantidadSembrada: 2, unidad: 'kg', emoji: '🥕' },
+    { nombre: 'Acelga', tipo: 'hortaliza', huerta: h2._id, estado: 'lista_cosechar',
+      fechaSiembra: new Date('2025-01-15'), cantidadSembrada: 3, unidad: 'kg', emoji: '🥬' },
+  ]);
+
+  const v1 = await Voluntario.create({
+    nombre: 'Ana', apellido: 'Rodríguez', email: 'ana@email.com',
+    huertas: [h1._id], disponibilidad: ['lunes', 'miercoles'], horasAcumuladas: 24,
+  });
+  const v2 = await Voluntario.create({
+    nombre: 'Juan', apellido: 'Pérez', email: 'juan@email.com',
+    huertas: [h2._id], disponibilidad: ['martes', 'jueves'], horasAcumuladas: 16,
+  });
+
+  await Tarea.create([
+    { titulo: 'Riego Diario', huerta: h1._id, asignadoA: v1._id,
+      tipo: 'riego', prioridad: 'alta', estado: 'pendiente', fechaLimite: new Date() },
+    { titulo: 'Siembra Lechuga', huerta: h2._id, asignadoA: v2._id,
+      tipo: 'siembra', prioridad: 'media', estado: 'en_proceso',
+      fechaLimite: new Date('2025-05-14') },
+  ]);
+
+  await Donacion.create([
+    { donante: { nombre: 'Empresa X', tipo: 'empresa' }, huerta: h1._id,
+      tipoDonacion: 'semillas', descripcion: 'Semillas de Maíz',
+      cantidad: 10, unidad: 'kg', valorEstimado: 50000, estado: 'recibida', emoji: '🌽',
+      fechaDonacion: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) },
+  ]);
+
+  console.log('\n✅ Seed completado');
+  console.log('   Docente: monica@huertas.com / 123456');
+  console.log('   Admin:   admin@huertas.com  / 123456\n');
+
+  await mongoose.disconnect();
+  process.exit(0);
+};
+
+seed().catch((err) => { console.error('❌ Error:', err); process.exit(1); });
+```
+
+---
+
+## Tabla de endpoints
+
+| Módulo | Método | Ruta | Rol mínimo |
+|---|---|---|---|
+| Auth | POST | `/api/auth/registro` | público |
+| Auth | POST | `/api/auth/login` | público |
+| Auth | GET | `/api/auth/perfil` | autenticado |
+| Auth | PUT | `/api/auth/perfil` | autenticado |
+| Huertas | GET | `/api/huertas` | autenticado |
+| Huertas | GET | `/api/huertas/:id` | autenticado |
+| Huertas | POST | `/api/huertas` | docente |
+| Huertas | PUT | `/api/huertas/:id` | docente |
+| Huertas | DELETE | `/api/huertas/:id` | admin |
+| Cultivos | GET | `/api/cultivos` | autenticado |
+| Cultivos | POST | `/api/cultivos` | docente |
+| Cultivos | PUT | `/api/cultivos/:id` | docente |
+| Cultivos | DELETE | `/api/cultivos/:id` | admin |
+| Voluntarios | GET | `/api/voluntarios` | autenticado |
+| Voluntarios | POST | `/api/voluntarios` | docente |
+| Voluntarios | PATCH | `/api/voluntarios/:id/horas` | docente |
+| Voluntarios | DELETE | `/api/voluntarios/:id` | admin |
+| Tareas | GET | `/api/tareas` | autenticado |
+| Tareas | POST | `/api/tareas` | docente |
+| Tareas | PATCH | `/api/tareas/:id/estado` | autenticado |
+| Tareas | DELETE | `/api/tareas/:id` | admin |
+| Donaciones | GET | `/api/donaciones` | autenticado |
+| Donaciones | POST | `/api/donaciones` | docente |
+| Donaciones | DELETE | `/api/donaciones/:id` | admin |
+| Reportes | GET | `/api/reportes/dashboard` | autenticado |
+| Reportes | GET | `/api/reportes/cultivos` | autenticado |
+| Reportes | GET | `/api/reportes/voluntarios` | autenticado |
+| Reportes | GET | `/api/reportes/donaciones` | autenticado |
+
+---
+
+*Huertas Comunitarias — Backend API · Node.js + Express + Mongoose + MongoDB Atlas*
